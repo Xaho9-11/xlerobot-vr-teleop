@@ -1,0 +1,17 @@
+{
+  "_note": "2026-11-10: lift/elbow offsets from the URDF ranges (Pitch 0 = upper arm forward-horizontal, pi/2 vertical; Elbow 0 = straight, pi folded) vs our pose 0 (upper arm vertical, forearm forward): Pitch = 90 - lift, Elbow = 90 + elbow; real rest pose lift -105 / elbow +89 then lands near the URDF folded limits. Wrist roll +90 (user: grippers turned 90 deg, wrist camera bracket faces back; +90 puts the URDF arm camera behind the roll axis). User checked the other joints by hand: broadly right. After the first console teleop run: head pan sign -1 (twin turned the other way); gripper 0 % = closed = Jaw -0.35 rad (jaws meet there), 100 % = 1.4 rad. Our motor names -> URDF joints (simulation/xlerobot/xlerobot.urdf). URDF angle = sign * pose_deg + offset_deg. Signs and offsets are FIRST GUESSES (2026-11-10) and must be checked joint by joint on the real robot with the user; left/right: the URDF \"_L\" chain sits on the robot RIGHT once arms and camera face forward (its camera link is even called Right_Arm_Camera), so left_arm_* drive the \"_R\" joints and vice versa (2026-11-10).",
+  "head_motor_1": {"joint": "head_pan_joint", "sign": -1, "offset_deg": 0},
+  "head_motor_2": {"joint": "head_tilt_joint", "sign": 1, "offset_deg": 0},
+  "left_arm_shoulder_pan": {"joint": "Rotation_R", "sign": 1, "offset_deg": 0},
+  "left_arm_shoulder_lift": {"joint": "Pitch_R", "sign": -1, "offset_deg": 90},
+  "left_arm_elbow_flex": {"joint": "Elbow_R", "sign": 1, "offset_deg": 90},
+  "left_arm_wrist_flex": {"joint": "Wrist_Pitch_R", "sign": 1, "offset_deg": 0},
+  "left_arm_wrist_roll": {"joint": "Wrist_Roll_R", "sign": 1, "offset_deg": 90},
+  "left_arm_gripper": {"joint": "Jaw_R", "gripper": true, "closed_rad": -0.35, "open_rad": 1.4},
+  "right_arm_shoulder_pan": {"joint": "Rotation_L", "sign": 1, "offset_deg": 0},
+  "right_arm_shoulder_lift": {"joint": "Pitch_L", "sign": -1, "offset_deg": 90},
+  "right_arm_elbow_flex": {"joint": "Elbow_L", "sign": 1, "offset_deg": 90},
+  "right_arm_wrist_flex": {"joint": "Wrist_Pitch_L", "sign": 1, "offset_deg": 0},
+  "right_arm_wrist_roll": {"joint": "Wrist_Roll_L", "sign": 1, "offset_deg": 90},
+  "right_arm_gripper": {"joint": "Jaw_L", "gripper": true, "closed_rad": -0.35, "open_rad": 1.4}
+}

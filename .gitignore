@@ -1,0 +1,14 @@
+# machine-specific configuration (copy the .example files)
+robot/xlerobot_ports.sh
+robot/joint_limits.json
+# downloaded web libraries (robot/console/web/vendor/fetch_vendor.sh)
+robot/console/web/vendor/three/
+robot/console/web/vendor/urdf-loader/
+# data never belongs in the repository
+*.mp4
+*.csv
+*.jsonl
+*.apk
+*.safetensors
+__pycache__/
+*.pyc

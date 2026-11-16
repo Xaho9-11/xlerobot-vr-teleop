@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0f">
+<meta name="mobile-web-app-capable" content="yes">
+<title>XLeRobot 遥控</title>
+<!-- Phone remote (2026-11-11; the researcher sits as the receiver: e-stop within reach, recording without the
+     keyboard). Same server and channel as the console (/ws -> robot core). A SOFTWARE stop over Wi-Fi: when the
+     link drops the whole page turns red and says so. Tokens follow console/web/app.css.
+     Layout v2 (user, same day): recording is the main control (shutter button, long press with a progress ring);
+     the e-stop is a red ring, still one tap. -->
+<style>
+:root { --bg: #0a0c0f; --ink: #e6e8eb; --ink-2: #a2a8b1; --ink-3: #5c636d; --line: rgba(255,255,255,.08);
+  --accent: #86d3c8; --accent-soft: rgba(134,211,200,.12); --danger: #ff5d4f;
+  --font: "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+body { font: 400 15px/1.45 var(--font); font-variant-numeric: tabular-nums; -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; touch-action: manipulation; overscroll-behavior: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.app { min-height: 100%; display: flex; flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+.top { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--ink-3); }
+.top b { font-weight: 600; color: var(--ink); font-size: 15px; letter-spacing: .02em; }
+.link { display: flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.ok .dot { background: var(--accent); }
+.mode { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+.mode b { font-weight: 500; color: var(--ink-2); }
+
+/* recording: the main control, centred on the screen (user v3: smaller shutter, in the middle) */
+.recbox { position: fixed; left: 0; right: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column;
+  align-items: center; }
+.clock { font-size: 56px; font-weight: 200; letter-spacing: .02em; line-height: 1; color: var(--ink-3); }
+.on .clock { color: var(--ink); }
+.state { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-3); }
+.state i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.on .state { color: var(--danger); }
+.on .state i { background: var(--danger); animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.shutter { position: relative; width: 120px; height: 120px; margin-top: 28px; border-radius: 50%; }
+.shutter svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.shutter .track { fill: none; stroke: rgba(255,255,255,.85); stroke-width: 6; }
+.shutter .prog { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 509; stroke-dashoffset: 509; }
+.shutter.press .prog { stroke-dashoffset: 0; transition: stroke-dashoffset .7s linear; }
+.shutter .core { position: absolute; left: 50%; top: 50%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%;
+  background: var(--danger); transition: all .25s ease; }
+.on .shutter .core { width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 10px; }
+.shutter.press .core { transform: scale(.94); }
+.shutter:disabled { opacity: .35; }
+.cue { margin-top: 14px; font-size: 13px; color: var(--ink-3); }
+
+.info { margin-top: auto; border-top: 1px solid var(--line); padding-top: 14px; }
+.meta { font-size: 13px; color: var(--ink-3); }
+.zone { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.zone.in { color: var(--accent); }
+.zone.in .dot { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.evs { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-3); }
+.evs li { display: flex; gap: 12px; padding: 3px 0; }
+.evs li b { font-weight: 400; color: var(--ink-2); min-width: 44px; }
+.evs li.auto span { color: var(--accent); }
+
+/* e-stop: a full-width red capsule at the bottom, one tap (pointerdown) */
+.estop { width: 100%; height: 64px; margin-top: 16px; border-radius: 999px; border: 3px solid var(--danger); color: var(--danger);
+  background: rgba(255,93,79,.08); font-size: 20px; font-weight: 700; letter-spacing: .3em; transition: transform .08s, background .15s; }
+.estop:active, .estop.hit { transform: scale(.98); background: var(--danger); color: #fff; }
+
+/* link lost: the whole page says the stop is not available */
+.lost { position: fixed; inset: 0; pointer-events: none; border: 4px solid var(--danger); display: none; z-index: 5; }
+.lostbar { display: none; margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(255,93,79,.14);
+  color: var(--danger); font-size: 14px; line-height: 1.5; }
+body.down .lost, body.down .lostbar { display: block; }
+body.down .estop { opacity: .4; }
+</style>
+</head>
+<body>
+<div class="lost"></div>
+<div class="app" id="app">
+  <div class="top"><b>XLeRobot 遥控</b><span class="link" id="link"><i class="dot"></i><span>连接中…</span></span></div>
+  <div class="lostbar">连接中断：手机急停暂时不可用。<br>请用电脑控制台急停，或等待自动重连。</div>
+  <div class="mode" id="mode">—</div>
+
+  <div class="recbox">
+    <div class="clock" id="clock">00:00</div>
+    <div class="state"><i></i><span id="state">未在录制</span></div>
+    <button class="shutter" id="rec" disabled aria-label="长按开始或结束录制">
+      <svg viewBox="0 0 168 168"><circle class="track" cx="84" cy="84" r="81"/><circle class="prog" cx="84" cy="84" r="81"/></svg>
+      <span class="core"></span>
+    </button>
+    <div class="cue" id="cue">长按开始录制</div>
+  </div>
+
+  <div class="info">
+    <div class="meta" id="meta"></div>
+    <div class="zone" id="zone"><i class="dot"></i><span id="zone-t">目标区域未设置</span></div>
+    <ul class="evs" id="evs"></ul>
+  </div>
+
+  <button class="estop" id="estop">急停</button>
+</div>
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const MODES = { idle: '空闲', hold: '已上扭矩', ready: '就绪', teleop: '遥操作中', fold: '收回中', replay: '回放中',
+  nobus: '舵机未连接', offline: '机器人核心未运行' };
+const ARMS = { left: '左臂', right: '右臂', both: '双臂' };
+const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let ws = null, lastMsg = 0, state = null, estopAt = 0;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'state') { state = m; lastMsg = Date.now(); render(m); }
+  };
+  ws.onclose = () => { ws = null; setTimeout(connect, 800); };
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };
+}
+const send = (cmd, arg) => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ type: 'cmd', cmd, arg })); return true; } return false; };
+
+// link watchdog: state arrives ~30 Hz; 1.5 s of silence = lost
+setInterval(() => {
+  const up = ws && ws.readyState === 1 && Date.now() - lastMsg < 1500;
+  document.body.classList.toggle('down', !up);
+  $('#link').className = 'link' + (up ? ' ok' : '');
+  $('#link span').textContent = up ? '已连接' : '连接中断';
+}, 250);
+
+$('#estop').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const ok = send('estop');
+  buzz(ok ? [80, 40, 80] : [400]);
+  const b = $('#estop'); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 250);
+  if (ok) estopAt = Date.now();
+});
+
+// long press 0.7 s (the ring fills) to start or stop recording
+const recBtn = $('#rec');
+let pressT = null;
+const cancelPress = () => { clearTimeout(pressT); pressT = null; recBtn.classList.remove('press'); };
+recBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (recBtn.disabled) return;
+  recBtn.classList.add('press'); buzz(15);
+  pressT = setTimeout(() => {
+    pressT = null; recBtn.classList.remove('press');
+    send(state?.rec?.on ? 'rec_stop' : 'rec_start'); buzz([40, 30, 40]);
+  }, 700);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => recBtn.addEventListener(ev, cancelPress));
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function render(s) {
+  const mode = s.core === false ? 'offline' : s.mode;
+  const bits = [`<b>${MODES[mode] || mode}</b>`];
+  if (s.arms) bits.push(ARMS[s.arms] || s.arms);
+  if (estopAt && Date.now() - estopAt < 4000) bits.push(mode === 'idle' ? '已急停，扭矩已关闭' : '急停已发送');
+  else if (s.links && s.links.quest === false && mode !== 'offline') bits.push('头显未连接');
+  $('#mode').innerHTML = bits.join(' · ');
+
+  const r = s.rec, on = !!r?.on;
+  $('#app').classList.toggle('on', on);
+  recBtn.disabled = !r || mode === 'offline' || mode === 'nobus';
+  $('#clock').textContent = on ? fmt(r.elapsed) : '00:00';
+  $('#state').textContent = on ? `录制中 · 第 ${r.episode} 条` : '未在录制';
+  $('#cue').textContent = recBtn.disabled ? '机器人未就绪，不能录制' : on ? '长按结束录制' : '长按开始录制';
+  const ss = r?.session || {};
+  $('#meta').textContent = r ? `${ss.participant || '—'} · ${ss.scenario || '—'}${ss.style ? ' · ' + ss.style : ''}` : '';
+
+  const z = s.zone, zEl = $('#zone');
+  zEl.classList.toggle('in', !!z?.inside);
+  $('#zone-t').textContent = !z ? '目标区域不可用' : !z.set ? '目标区域未设置（在电脑控制台记录托盘位置）'
+    : on ? (r.arrived != null ? `已到达目标上方 · ${fmt(r.arrived)}` : (z.inside ? '夹爪在区域内（确认中）' : '尚未到达目标上方'))
+    : (z.inside ? '夹爪在目标区域内' : '夹爪在目标区域外');
+  const evs = on ? (r.evlog || []) : [];
+  $('#evs').innerHTML = evs.slice(-4).reverse().map(([t, label, src]) =>
+    `<li class="${src === 'auto' ? 'auto' : ''}"><b>${fmt(t)}</b><span>${esc(label)}</span></li>`).join('');
+}
+connect();
+</script>
+</body>
+</html>

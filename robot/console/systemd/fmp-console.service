@@ -1,0 +1,14 @@
+[Unit]
+Description=FMP robot console web page (http://<robot>:8080)
+After=network-online.target fmp-core.service
+
+[Service]
+WorkingDirectory=%h/fmp_scripts/console
+ExecStart=%h/miniforge3/envs/lerobot/bin/python server.py
+Restart=always
+RestartSec=3
+StandardOutput=append:%h/fmp_logs/console.log
+StandardError=append:%h/fmp_logs/console.log
+
+[Install]
+WantedBy=default.target

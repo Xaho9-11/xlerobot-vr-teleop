@@ -1,0 +1,90 @@
+{
+  "pose_deg_limits_both_arms": {
+    "shoulder_pan": [
+      -57.7,
+      57.7
+    ],
+    "shoulder_lift": [
+      -101.2,
+      91.8
+    ],
+    "elbow_flex": [
+      -96.3,
+      86.2
+    ],
+    "wrist_flex": [
+      -99.5,
+      66.4
+    ],
+    "wrist_roll": [
+      -170.0,
+      170.0
+    ]
+  },
+  "pose_deg_limits_head": {
+    "head_motor_1": [
+      -110.5,
+      120.2
+    ],
+    "head_motor_2": [
+      -105.2,
+      90.2
+    ]
+  },
+  "gripper_percent": [
+    0.0,
+    100.0
+  ],
+  "margin_deg": 3.0,
+  "source": "xlerobot_fmp.json",
+  "lerobot_deg_limits": {
+    "left_arm_shoulder_pan": [
+      -35.72,
+      79.68
+    ],
+    "left_arm_shoulder_lift": [
+      -99.31,
+      93.69
+    ],
+    "left_arm_elbow_flex": [
+      -89.09,
+      93.41
+    ],
+    "left_arm_wrist_flex": [
+      -97.92,
+      67.98
+    ],
+    "left_arm_wrist_roll": [
+      -170.18,
+      169.82
+    ],
+    "right_arm_shoulder_pan": [
+      -74.14,
+      41.26
+    ],
+    "right_arm_shoulder_lift": [
+      -96.5,
+      96.5
+    ],
+    "right_arm_elbow_flex": [
+      -93.75,
+      88.75
+    ],
+    "right_arm_wrist_flex": [
+      -82.93,
+      82.97
+    ],
+    "right_arm_wrist_roll": [
+      -170.48,
+      169.52
+    ],
+    "head_motor_1": [
+      -115.34,
+      115.36
+    ],
+    "head_motor_2": [
+      -97.68,
+      97.72
+    ]
+  }
+}

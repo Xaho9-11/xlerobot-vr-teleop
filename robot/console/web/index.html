@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XLeRobot</title>
+<link rel="stylesheet" href="/web/app.css">
+<script type="importmap">
+{ "imports": {
+  "three": "/web/vendor/three/three.module.js",
+  "three/examples/jsm/": "/web/vendor/three/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="twin"></canvas>
+<div class="shade"></div>
+
+<header class="top">
+  <div class="brand">
+    <span class="mark">XLeRobot</span>
+    <span class="sub" id="source">连接中…</span>
+  </div>
+  <nav>
+    <a class="on" id="nav-robot">机器人</a>
+    <a id="nav-data">数据</a>
+    <a id="nav-train">训练</a>
+  </nav>
+  <div class="actions">
+    <ul class="links" id="links"></ul>
+    <button class="quiet" data-cmd="stop">停止并收回</button>
+    <button class="estop" data-cmd="estop">急停</button>
+  </div>
+</header>
+
+<aside class="rail left">
+  <section>
+    <h6>模式</h6>
+    <ol class="modes" id="modes"></ol>
+    <button class="primary" id="next"></button>
+    <button class="link" id="fold-set" title="扭矩关闭时把双臂和头摆到折叠位，再点这里">把当前姿态设为折叠位</button>
+  </section>
+  <section>
+    <h6>遥操作</h6>
+    <div class="seg" id="arms">
+      <button data-v="left">左臂</button><button data-v="right">右臂</button><button data-v="both">双臂</button>
+    </div>
+    <div class="kv"><span>头部</span><span>跟随头显</span></div>
+    <div class="kv"><span>映射</span><span>关节对应</span></div>
+    <div class="kv"><span>头显</span><span id="quest">—</span></div>
+    <div class="prompts" id="prompts"></div>
+    <button class="link" data-cmd="recenter">头部重新居中</button>
+  </section>
+  <section>
+    <h6>录制</h6>
+    <div class="fields">
+      <label><span>参与者</span><input id="f-participant" spellcheck="false" autocomplete="off"></label>
+      <label><span>场景</span><input id="f-scenario" spellcheck="false" autocomplete="off"></label>
+      <label><span>风格</span><input id="f-style" spellcheck="false" autocomplete="off" placeholder="可空"></label>
+    </div>
+    <button class="rec" id="rec-btn"><i></i><span id="rec-label">开始录制</span><b id="rec-time"></b></button>
+    <div class="tz" id="tz">
+      <div class="tz-head"><span>目标区域</span><span id="tz-st">未设置</span></div>
+      <div class="tz-live" id="tz-live"></div>
+      <div class="tz-ctl">
+        <button class="link" id="tz-set" title="把夹爪放在托盘中心、贴近托盘表面后点击；上扭矩前也可以手动摆">记录托盘位置</button>
+        <label>半径 <input id="tz-r" type="number" min="2" max="40" step="1"> cm</label>
+      </div>
+    </div>
+    <div class="evts" id="rec-evts">
+      <button data-evt="到达目标上方">到达目标上方<kbd>1</kbd></button>
+      <button data-evt="接收方拿起物体">接收方拿起<kbd>2</kbd></button>
+    </div>
+    <div class="last" id="rec-last"></div>
+  </section>
+</aside>
+
+<aside class="rail right" id="joints"></aside>
+<aside class="rail right data" id="data" hidden></aside>
+
+<div class="player" id="player" hidden>
+  <button id="pb-play" class="pb-btn">▶</button>
+  <button id="pb-speed" class="pb-btn small">1×</button>
+  <div class="pb-bar" id="pb-bar"><div class="pb-fill" id="pb-fill"></div><div class="pb-ticks" id="pb-ticks"></div></div>
+  <span class="pb-time" id="pb-time"></span>
+  <span class="pb-time" id="pb-clock" title="录制时的真实时刻"></span>
+  <span class="pb-event" id="pb-event"></span>
+  <button id="pb-robot" class="quiet">在机器人上回放</button>
+  <button id="pb-close" class="pb-btn small">退出回放</button>
+</div>
+
+<footer>
+  <div class="log" id="log"></div>
+  <div class="legend">
+    <span><i class="sw solid"></i>实际</span>
+    <label><input type="checkbox" id="show-goal" checked><i class="sw goal"></i>目标</label>
+  </div>
+  <div class="sys" id="sys"></div>
+</footer>
+
+<script type="module" src="/web/app.js"></script>
+</body>
+</html>

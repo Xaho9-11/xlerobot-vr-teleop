@@ -1,0 +1,14 @@
+[Unit]
+Description=FMP training dashboard (http://<robot>:8090; reads ~/fmp_train/runs)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/fmp_scripts/act_test
+ExecStart=%h/miniforge3/envs/lerobot/bin/python train_dashboard.py
+Restart=always
+RestartSec=3
+StandardOutput=append:%h/fmp_train/dashboard.log
+StandardError=append:%h/fmp_train/dashboard.log
+
+[Install]
+WantedBy=default.target

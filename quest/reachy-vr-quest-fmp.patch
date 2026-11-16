@@ -1,0 +1,496 @@
+diff --git a/Assets/Config/ReachyTeleopConfig.asset b/Assets/Config/ReachyTeleopConfig.asset
+index 720a451..369ba48 100644
+--- a/Assets/Config/ReachyTeleopConfig.asset
++++ b/Assets/Config/ReachyTeleopConfig.asset
+@@ -17,7 +17,7 @@ MonoBehaviour:
+   endpoint: tcp://localhost:40000
+   identity: body
+   heartbeatInterval: 2
+-  sendRateHz: 30
++  sendRateHz: 72
+   sendBodyYaw: 1
+   sendAntennas: 1
+   bodyYawLimitDegrees: 45
+diff --git a/Assets/FmpTools/Editor/FmpBatch.cs b/Assets/FmpTools/Editor/FmpBatch.cs
+new file mode 100644
+index 0000000..727163b
+--- /dev/null
++++ b/Assets/FmpTools/Editor/FmpBatch.cs
+@@ -0,0 +1,42 @@
++// FMP local helper (not part of upstream reachy-vr-quest): batchmode entry points.
++// Lives in its own editor assembly so it compiles even while Assembly-CSharp is missing NuGet DLLs.
++//   Unity.exe -batchmode -nographics -ignorecompilererrors -projectPath <p> -executeMethod FmpTools.FmpBatch.RestoreNuget -quit
++//   Unity.exe -batchmode -nographics -projectPath <p> -buildTarget Android -executeMethod FmpTools.FmpBatch.BuildAndroid -quit
++using System.IO;
++using System.Linq;
++using UnityEditor;
++using UnityEditor.Build.Reporting;
++using UnityEngine;
++
++namespace FmpTools
++{
++    public static class FmpBatch
++    {
++        public static void RestoreNuget()
++        {
++            Debug.Log("[FmpBatch] NuGet restore start");
++            NugetForUnity.PackageRestorer.Restore(false);
++            AssetDatabase.Refresh();
++            Debug.Log("[FmpBatch] NuGet restore done");
++        }
++
++        public static void BuildAndroid()
++        {
++            var scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
++            Directory.CreateDirectory("Builds");
++            var options = new BuildPlayerOptions
++            {
++                scenes = scenes,
++                locationPathName = "Builds/ReachyMiniTeleop-fmp.apk",
++                target = BuildTarget.Android,
++                options = BuildOptions.Development,
++            };
++            Debug.Log("[FmpBatch] Building scenes: " + string.Join(", ", scenes));
++            BuildReport report = BuildPipeline.BuildPlayer(options);
++            Debug.Log($"[FmpBatch] Build result: {report.summary.result}, size {report.summary.totalSize} bytes, " +
++                      $"errors {report.summary.totalErrors}, time {report.summary.totalTime}");
++            if (Application.isBatchMode)
++                EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
++        }
++    }
++}
+diff --git a/Assets/FmpTools/Editor/FmpTools.Editor.asmdef b/Assets/FmpTools/Editor/FmpTools.Editor.asmdef
+new file mode 100644
+index 0000000..3b1fb8a
+--- /dev/null
++++ b/Assets/FmpTools/Editor/FmpTools.Editor.asmdef
+@@ -0,0 +1,9 @@
++{
++    "name": "FmpTools.Editor",
++    "rootNamespace": "FmpTools",
++    "references": ["NuGetForUnity"],
++    "includePlatforms": ["Editor"],
++    "excludePlatforms": [],
++    "allowUnsafeCode": false,
++    "autoReferenced": false
++}
+diff --git a/Assets/Scenes/ReachyMiniTeleop.unity b/Assets/Scenes/ReachyMiniTeleop.unity
+index 5e61202..95fbda0 100644
+--- a/Assets/Scenes/ReachyMiniTeleop.unity
++++ b/Assets/Scenes/ReachyMiniTeleop.unity
+@@ -172,7 +172,7 @@ MonoBehaviour:
+   zmqDealerClient: {fileID: 0}
+   config: {fileID: 11400000, guid: bbbbbbbb000000000000000000000001, type: 2}
+   publishOnEnable: 1
+-  verbose: 1
++  verbose: 0
+ --- !u!114 &1004
+ MonoBehaviour:
+   m_ObjectHideFlags: 0
+@@ -203,11 +203,11 @@ MonoBehaviour:
+   apiBaseUrl: http://192.168.0.210:8000/api
+   autoStart: 0
+   autoWakeOnStart: 1
+-  verboseLogging: 1
++  verboseLogging: 0
+   maxQueuedMessages: 3
+   maxSendsPerFrame: 1
+   requestTimeoutSeconds: 3
+-  soundEnabled: 1
++  soundEnabled: 0
+   defaultSoundFile: wake_up.wav
+   soundRequestTimeoutSeconds: 1
+ --- !u!114 &1006
+@@ -259,7 +259,7 @@ MonoBehaviour:
+   m_PrefabInstance: {fileID: 0}
+   m_PrefabAsset: {fileID: 0}
+   m_GameObject: {fileID: 1000}
+-  m_Enabled: 1
++  m_Enabled: 0
+   m_EditorHideFlags: 0
+   m_Script: {fileID: 11500000, guid: d9463e9bb8764d349b0cc8f82d8f59bc, type: 3}
+   m_Name: 
+@@ -267,7 +267,7 @@ MonoBehaviour:
+   daemonClient: {fileID: 1005}
+   statusLabel: {fileID: 0}
+   autoFindReferences: 1
+-  triggerEnabled: 1
++  triggerEnabled: 0
+   globalCooldownSeconds: 6
+   triggerThreshold: 0.7
+   resetThreshold: 0.35
+diff --git a/Assets/Scripts/Runtime/Reachy/FmpAutoConnect.cs b/Assets/Scripts/Runtime/Reachy/FmpAutoConnect.cs
+new file mode 100644
+index 0000000..4b26811
+--- /dev/null
++++ b/Assets/Scripts/Runtime/Reachy/FmpAutoConnect.cs
+@@ -0,0 +1,138 @@
++// FMP (2026-11-13): connect pose and video automatically, so the headset needs no menu clicks.
++// On start (after a short delay for the scene to settle) both "connect" toggles are switched on with the saved
++// Robot IP; while a toggle stays on, a dropped connection is retried every few seconds. Switching a toggle off in
++// the headset is respected (no retry until it is switched on again). The Robot IP itself is set from the PC
++// (quest.ps1 ip lab|home edits the saved PlayerPrefs of this debuggable build).
++// Self-installing: created after the scene loads, so the scene file stays untouched.
++using System.Collections;
++using ReachyMiniTeleop.Transport;
++using ReachyMiniTeleop.UI;
++using UnityEngine;
++
++namespace ReachyMiniTeleop.Reachy
++{
++    public sealed class FmpAutoConnect : MonoBehaviour
++    {
++        public float startDelay = 2f;
++        public float retryInterval = 3f;
++        // Menu panel (2026-11-13, user: the Robot IP window could not be hidden and blocked the view): hidden once
++        // pose and video are both up; the LEFT controller's menu button (≡) shows / hides it (X/A record the
++        // neutral grip, B records, Y opens the system menu); shown again when the links have been down this long.
++        public float showMenuAfterDownSeconds = 10f;
++
++        private ReachyDaemonTargetWebSocketClient _daemon;
++        private WebRTCClient _rtc;
++        private CanvasGroup _menu;
++        private bool _menuShown = true, _manual, _lastUp;
++        private float _upSince = -1f, _downSince;
++
++        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
++        private static void Install()
++        {
++            if (FindFirstObjectByType<FmpAutoConnect>() != null)
++                return;
++            var go = new GameObject("FmpAutoConnect");
++            DontDestroyOnLoad(go);
++            go.AddComponent<FmpAutoConnect>();
++        }
++
++        private IEnumerator Start()
++        {
++            yield return new WaitForSeconds(startDelay);
++            string ip = PlayerPrefs.GetString(ReachyEndpointInputController.PlayerPrefsKey, "");
++            if (string.IsNullOrWhiteSpace(ip))
++            {
++                Debug.Log("[FmpAutoConnect] no saved Robot IP; waiting for manual connect");
++                yield break;
++            }
++
++            var pose = FindFirstObjectByType<ReachyEndpointInputController>();
++            var video = FindFirstObjectByType<ReachyVideoInputController>();
++            var daemon = _daemon = FindFirstObjectByType<ReachyDaemonTargetWebSocketClient>();
++            var rtc = _rtc = FindFirstObjectByType<WebRTCClient>();
++            var follow = FindFirstObjectByType<HeadFollowMenu>();  // the head-following menu with the IP fields
++            if (follow != null)  // hide by fading the canvas; its scripts keep running (connect paths stay usable)
++                _menu = follow.GetComponent<CanvasGroup>() ?? follow.gameObject.AddComponent<CanvasGroup>();
++            _downSince = Time.unscaledTime;
++            Debug.Log($"[FmpAutoConnect] ip={ip} pose={(pose != null)} video={(video != null)} daemon={(daemon != null)} rtc={(rtc != null)}");
++
++            // The Reachy Mini "wake" call is an http:// request to the original daemon's REST API; our robot core
++            // has no such API, and this build blocks plain http, so the call threw and aborted the pose connect.
++            if (daemon != null)
++                daemon.autoWakeOnStart = false;
++            // both connect paths read the IP from their input fields; fill them from the saved value (the video
++            // field otherwise keeps the scene default)
++            if (pose != null && pose.robotIpInput != null)
++                pose.robotIpInput.SetTextWithoutNotify(ip);
++            if (video != null && video.robotIpInput != null)
++                video.robotIpInput.SetTextWithoutNotify(ip);
++
++            // the user's intent: on at start; a click on a toggle in the headset changes it. (The video toggle also
++            // follows the link state without notifying - a drop turns it off - so the toggle itself is not the intent.)
++            bool wantPose = true, wantVideo = true;
++            if (pose != null && pose.connectPoseToggle != null)
++                pose.connectPoseToggle.onValueChanged.AddListener(v => wantPose = v);
++            if (video != null && video.connectVideoToggle != null)
++                video.connectVideoToggle.onValueChanged.AddListener(v => wantVideo = v);
++
++            // switching the toggles on runs the app's own connect path (same as a click in the headset)
++            if (pose != null && pose.connectPoseToggle != null && !pose.connectPoseToggle.isOn)
++                pose.connectPoseToggle.isOn = true;
++            if (video != null && video.connectVideoToggle != null && !video.connectVideoToggle.isOn)
++                video.connectVideoToggle.isOn = true;
++            wantPose = wantVideo = true;
++
++            var wait = new WaitForSeconds(retryInterval);
++            while (true)
++            {
++                yield return wait;
++                if (wantPose && pose != null && daemon != null && !daemon.IsConnectedOrConnecting)
++                {
++                    Debug.Log("[FmpAutoConnect] pose link down, reconnecting");
++                    pose.TryConnectFromCurrentInput();
++                }
++
++                if (wantVideo && video != null && rtc != null && !rtc.IsConnectedOrConnecting)
++                {
++                    Debug.Log("[FmpAutoConnect] video link down, reconnecting");
++                    video.TryConnectFromCurrentInput();
++                }
++            }
++        }
++
++        private void Update()
++        {
++            if (_menu == null)
++                return;
++            if (OVRInput.GetDown(OVRInput.Button.Start))  // left controller menu button
++            {
++                SetMenu(!_menuShown);
++                _manual = true;  // the user decides until the link state changes
++            }
++
++            bool up = _daemon != null && _daemon.IsRunning && _rtc != null && _rtc.IsConnectedOrConnecting;
++            float now = Time.unscaledTime;
++            if (up != _lastUp)
++            {
++                _lastUp = up;
++                _manual = false;
++                if (up) _upSince = now; else _downSince = now;
++            }
++            if (_manual)
++                return;
++            if (up && _menuShown && now - _upSince > 1.5f)
++                SetMenu(false);
++            else if (!up && !_menuShown && now - _downSince > showMenuAfterDownSeconds)
++                SetMenu(true);
++        }
++
++        private void SetMenu(bool show)
++        {
++            _menuShown = show;
++            _menu.alpha = show ? 1f : 0f;
++            _menu.interactable = show;
++            _menu.blocksRaycasts = show;
++            Debug.Log($"[FmpAutoConnect] menu {(show ? "shown" : "hidden")}");
++        }
++    }
++}
+diff --git a/Assets/Scripts/Runtime/Reachy/FmpXrInput.cs b/Assets/Scripts/Runtime/Reachy/FmpXrInput.cs
+new file mode 100644
+index 0000000..f06330d
+--- /dev/null
++++ b/Assets/Scripts/Runtime/Reachy/FmpXrInput.cs
+@@ -0,0 +1,88 @@
++// FMP addition (2026-10-20, not part of upstream reachy-vr-quest): controller state for XLeRobot arm teleop.
++// Sent as "fmp_controllers" inside the FullBodyTarget JSON each frame. Poses are raw Unity XR tracking-space
++// values (left-handed: x right, y up, z forward; metres; quaternion x,y,z,w) for the head and both controllers,
++// so the robot side can express hand motion relative to where the operator is facing.
++using Newtonsoft.Json;
++using UnityEngine;
++using UnityEngine.XR;
++
++namespace ReachyMiniTeleop.Reachy
++{
++    [System.Serializable]
++    public sealed class FmpXrPose
++    {
++        [JsonProperty("tracked")] public bool tracked;
++        [JsonProperty("pos")] public float[] pos;
++        [JsonProperty("rot")] public float[] rot;
++    }
++
++    [System.Serializable]
++    public sealed class FmpXrController
++    {
++        [JsonProperty("tracked")] public bool tracked;
++        [JsonProperty("pos")] public float[] pos;
++        [JsonProperty("rot")] public float[] rot;
++        [JsonProperty("trigger")] public float trigger;
++        [JsonProperty("grip")] public float grip;
++        [JsonProperty("primary")] public bool primary;      // A / X
++        [JsonProperty("secondary")] public bool secondary;  // B / Y
++        [JsonProperty("stick")] public float[] stick;       // thumbstick x, y
++        [JsonProperty("stick_click")] public bool stickClick;
++    }
++
++    [System.Serializable]
++    public sealed class FmpXrState
++    {
++        [JsonProperty("head")] public FmpXrPose head;
++        [JsonProperty("left")] public FmpXrController left;
++        [JsonProperty("right")] public FmpXrController right;
++    }
++
++    public static class FmpXrInput
++    {
++        public static FmpXrState Read()
++        {
++            return new FmpXrState
++            {
++                head = ReadPose(XRNode.CenterEye),
++                left = ReadController(XRNode.LeftHand),
++                right = ReadController(XRNode.RightHand),
++            };
++        }
++
++        private static FmpXrPose ReadPose(XRNode node)
++        {
++            var d = InputDevices.GetDeviceAtXRNode(node);
++            var p = new FmpXrPose();
++            if (!d.isValid)
++                return p;
++            d.TryGetFeatureValue(CommonUsages.isTracked, out p.tracked);
++            if (d.TryGetFeatureValue(CommonUsages.devicePosition, out Vector3 pos))
++                p.pos = new[] { pos.x, pos.y, pos.z };
++            if (d.TryGetFeatureValue(CommonUsages.deviceRotation, out Quaternion rot))
++                p.rot = new[] { rot.x, rot.y, rot.z, rot.w };
++            return p;
++        }
++
++        private static FmpXrController ReadController(XRNode node)
++        {
++            var d = InputDevices.GetDeviceAtXRNode(node);
++            var c = new FmpXrController();
++            if (!d.isValid)
++                return c;
++            d.TryGetFeatureValue(CommonUsages.isTracked, out c.tracked);
++            if (d.TryGetFeatureValue(CommonUsages.devicePosition, out Vector3 pos))
++                c.pos = new[] { pos.x, pos.y, pos.z };
++            if (d.TryGetFeatureValue(CommonUsages.deviceRotation, out Quaternion rot))
++                c.rot = new[] { rot.x, rot.y, rot.z, rot.w };
++            d.TryGetFeatureValue(CommonUsages.trigger, out c.trigger);
++            d.TryGetFeatureValue(CommonUsages.grip, out c.grip);
++            d.TryGetFeatureValue(CommonUsages.primaryButton, out c.primary);
++            d.TryGetFeatureValue(CommonUsages.secondaryButton, out c.secondary);
++            if (d.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 stick))
++                c.stick = new[] { stick.x, stick.y };
++            d.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out c.stickClick);
++            return c;
++        }
++    }
++}
+diff --git a/Assets/Scripts/Runtime/Reachy/ReachyDaemonPayloadDtos.cs b/Assets/Scripts/Runtime/Reachy/ReachyDaemonPayloadDtos.cs
+index 5297f51..7bc5fab 100644
+--- a/Assets/Scripts/Runtime/Reachy/ReachyDaemonPayloadDtos.cs
++++ b/Assets/Scripts/Runtime/Reachy/ReachyDaemonPayloadDtos.cs
+@@ -20,5 +20,14 @@ namespace ReachyMiniTeleop.Reachy
+ 
+         [JsonProperty("target_body_yaw", NullValueHandling = NullValueHandling.Ignore)]
+         public float? targetBodyYaw;
++
++        // FMP addition (2026-10-20): headset wall-clock send time, Unix epoch milliseconds. Lets the robot
++        // side time its filter by when the pose was sampled instead of when it arrived over Wi-Fi.
++        [JsonProperty("send_time_ms", NullValueHandling = NullValueHandling.Ignore)]
++        public double? sendTimeMs;
++
++        // FMP addition (2026-10-20): head + controller state for XLeRobot arm teleop (see FmpXrInput)
++        [JsonProperty("fmp_controllers", NullValueHandling = NullValueHandling.Ignore)]
++        public FmpXrState fmpControllers;
+     }
+ }
+diff --git a/Assets/Scripts/Runtime/Reachy/ReachyDaemonTargetAdapter.cs b/Assets/Scripts/Runtime/Reachy/ReachyDaemonTargetAdapter.cs
+index 1e5f087..b3b7448 100644
+--- a/Assets/Scripts/Runtime/Reachy/ReachyDaemonTargetAdapter.cs
++++ b/Assets/Scripts/Runtime/Reachy/ReachyDaemonTargetAdapter.cs
+@@ -39,7 +39,13 @@ namespace ReachyMiniTeleop.Reachy
+ 
+         public static string ToJson(ReachyHeadPayload payload)
+         {
+-            return ToJson(FromHeadPayload(payload));
++            var target = FromHeadPayload(payload);
++            if (target != null)  // FMP: stamp the send time (see ReachyDaemonFullBodyTarget.sendTimeMs)
++            {
++                target.sendTimeMs = (System.DateTime.UtcNow - new System.DateTime(1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)).TotalMilliseconds;
++                target.fmpControllers = FmpXrInput.Read();  // FMP: controllers for arm teleop
++            }
++            return ToJson(target);
+         }
+ 
+         public static string ToJson(ReachyDaemonFullBodyTarget target)
+diff --git a/Assets/Scripts/Runtime/Reachy/ReachyHeadCommandPublisher.cs b/Assets/Scripts/Runtime/Reachy/ReachyHeadCommandPublisher.cs
+index 5852841..873eb5d 100644
+--- a/Assets/Scripts/Runtime/Reachy/ReachyHeadCommandPublisher.cs
++++ b/Assets/Scripts/Runtime/Reachy/ReachyHeadCommandPublisher.cs
+@@ -138,10 +138,18 @@ namespace ReachyMiniTeleop.Reachy
+             while (SkeletonProvider == null || !SkeletonProvider.SkeletonReady)
+                 yield return new WaitForSeconds(0.5f);
+ 
++            // FMP 2026-10-20: was WaitForSeconds(1/sendRateHz), which rounds up to whole frames at 72 fps
++            // (30 Hz config -> ~22-24 Hz measured). Now checked every frame; sendRateHz >= display rate
++            // means one pose per rendered frame.
++            float next = Time.unscaledTime;
+             while (true)
+             {
+-                float delay = 1f / Mathf.Max(Config.sendRateHz, 0.01f);
+-                yield return new WaitForSeconds(delay);
++                yield return null;
++                float interval = 1f / Mathf.Max(Config.sendRateHz, 0.01f);
++                float now = Time.unscaledTime;
++                if (now + 0.002f < next)
++                    continue;
++                next = Mathf.Max(next + interval, now - interval);
+                 PublishOnce();
+             }
+         }
+diff --git a/Assets/Scripts/Runtime/Transport/ReachyDaemonTargetWebSocketClient.cs b/Assets/Scripts/Runtime/Transport/ReachyDaemonTargetWebSocketClient.cs
+index 7e0cc98..70245a6 100644
+--- a/Assets/Scripts/Runtime/Transport/ReachyDaemonTargetWebSocketClient.cs
++++ b/Assets/Scripts/Runtime/Transport/ReachyDaemonTargetWebSocketClient.cs
+@@ -334,12 +334,13 @@ namespace ReachyMiniTeleop.Transport
+             {
+                 webSocket = CreateWebSocket(url, generation);
+                 webSocket.Connect();
++                EnableNoDelay(webSocket, generation);
+ 
+-                while (_running && !_stopSignal.IsSet && webSocket.IsAlive)
++                while (_running && !_stopSignal.IsSet && webSocket.ReadyState == WebSocketState.Open) // FMP 2026-10-19: was IsAlive; sending was capped at ~8.6 Hz (gap ~100 ms), consistent with IsAlive doing a ping round-trip per read
+                 {
+                     WaitHandle.WaitAny(new[] { _stopSignal.WaitHandle, _sendSignal }, 50);
+ 
+-                    if (!_running || _stopSignal.IsSet || !webSocket.IsAlive)
++                    if (!_running || _stopSignal.IsSet || webSocket.ReadyState != WebSocketState.Open)
+                         break;
+ 
+                     if (!TryDequeueLatestOutgoing(out string data))
+@@ -368,7 +369,7 @@ namespace ReachyMiniTeleop.Transport
+             {
+                 try
+                 {
+-                    if (webSocket != null && webSocket.IsAlive)
++                    if (webSocket != null && webSocket.ReadyState == WebSocketState.Open)
+                         webSocket.Close();
+                 }
+                 catch (Exception ex)
+@@ -381,6 +382,30 @@ namespace ReachyMiniTeleop.Transport
+             }
+         }
+ 
++        // FMP 2026-10-20: websocket-sharp exposes no NoDelay, so small pose messages were held by Nagle and
++        // arrived in pairs (~20 ms apart, then ~100 ms gaps). Its private TcpClient field is "_tcpClient".
++        private void EnableNoDelay(WebSocket webSocket, int generation)
++        {
++            try
++            {
++                var field = typeof(WebSocket).GetField("_tcpClient",
++                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
++                if (field?.GetValue(webSocket) is TcpClient tcp)
++                {
++                    tcp.NoDelay = true;
++                    EnqueueMainThreadLog("[ReachyDaemonTargetWebSocketClient] TCP NoDelay enabled", false);
++                }
++                else
++                {
++                    EnqueueMainThreadLog("[ReachyDaemonTargetWebSocketClient] TCP NoDelay: _tcpClient not found", true);
++                }
++            }
++            catch (Exception ex)
++            {
++                EnqueueMainThreadLog($"[ReachyDaemonTargetWebSocketClient] TCP NoDelay failed: {ex.Message}", true);
++            }
++        }
++
+         private WebSocket CreateWebSocket(string url, int generation)
+         {
+             var webSocket = new WebSocket(url)
+diff --git a/ProjectSettings/ProjectSettings.asset b/ProjectSettings/ProjectSettings.asset
+index 7db38c7..999c685 100644
+--- a/ProjectSettings/ProjectSettings.asset
++++ b/ProjectSettings/ProjectSettings.asset
+@@ -146,6 +146,9 @@ PlayerSettings:
+   bundleVersion: 1.77
+   preloadedAssets:
+   - {fileID: 11400000, guid: e2d4417495d3b1b4fa21a085d656bec4, type: 2}
++  - {fileID: 11400000, guid: 57d2ae330a824414f813580690fd38dc, type: 2}
++  - {fileID: 788137009069172043, guid: f62a3ba762b4428418db6416d61d1f8d, type: 2}
++  - {fileID: -6080524631076502763, guid: ff2507e259e7e7542b35d1160bd70b01, type: 2}
+   metroInputSource: 0
+   wsaTransparentSwapchain: 0
+   m_HolographicPauseOnTrackingLoss: 1

@@ -1,0 +1,16 @@
+[Unit]
+Description=FMP robot core (owns both servo buses; console channel 127.0.0.1:8770, Quest pose :8000)
+After=network-online.target
+
+[Service]
+ExecStart=/bin/bash %h/fmp_scripts/console/core.sh
+# SIGINT: the core folds the arms and releases torque before exiting
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:%h/fmp_logs/core.log
+StandardError=append:%h/fmp_logs/core.log
+
+[Install]
+WantedBy=default.target

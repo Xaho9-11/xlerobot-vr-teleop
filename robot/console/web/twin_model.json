@@ -1,0 +1,18 @@
+{
+  "_note": "Arm bases turn about their mesh centre (Base.stl bbox centre, local (0,-0.023)) = centre of the round mounting plate in the URDF design; turning about the frame origin or the pan axis left them off-centre (user, 2026-11-10). Digital twin composition (2026-11-10, user: IKEA RASKOG cart build, three-omniwheel base, open-source XLeRobot sizes). Upper body (cart, arms, head) from the URDF; base from the MJCF, hung under the URDF chassis frame. offset z: URDF cart bottom is at z=-0.318 (raskogbody bbox), MJCF base top plate at ~+0.06, so -0.378 puts the cart on the plate. yaw_deg turns the base (wheel layout) about the vertical; check against the real robot.",
+  "urdf": "/urdf/xlerobot.urdf",
+  "mjcf": "/mjcf/xlerobot.xml",
+  "_note_base_2026_11_11": "User: base white, and one base-height higher: offset z -0.378 -> -0.254 (+0.124 m = omniwheel diameter, the base's own height).",
+  "_note_base_2026_11_11b": "User: wheels touch the floor; base another half height up (-0.254 -> -0.192); only wheels, hubs and drive servos white, plates keep the graphite. The twin now stands on the wheels (twin.js).",
+  "_note_base_2026_11_11c": "User: the half height was meant DOWN; now one full base height down from -0.192 -> -0.316.",
+  "_note_base_2026_11_11d": "User: 1 cm up (-0.316 -> -0.306).",
+  "_note_base_2026_11_11e": "User: slight clipping, 2 mm down (-0.306 -> -0.308).",
+  "base": {"offset": [0, 0, -0.308], "yaw_deg": 0, "color": "#e3e5e8", "light_parts": "Omni-Directional-Wheel|VersaHub|ST3215_Servo"},
+  "joint_yaw_deg": {
+    "fixed_Base": {"deg": 90, "pivot_local": [0, -0.023, 0]},
+    "fixed_Base_2": {"deg": -90, "pivot_local": [0, -0.023, 0]},
+    "head_pan_joint": 180,
+    "fixed_top_base_link_geom_1": {"deg": 180, "pivot": "head_pan_joint"}
+  },
+  "joint_shift": {"fixed_Base": [-0.0021, -0.005, 0], "fixed_Base_2": [-0.0021, 0.005, 0]}
+}
